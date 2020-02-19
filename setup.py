@@ -2,6 +2,9 @@
 """
 
 from setuptools import setup, find_packages
+import julia
+from julia import Pkg
+
 
 __author__ = 'Glaucon Garcia'
 __description__ = 'webapp'
@@ -40,3 +43,7 @@ if __name__ == '__main__':
             'Topic :: Utilities'
         ]
     )
+
+    julia.install()
+    Pkg.add("JSON")
+    Pkg.add("JuMP")

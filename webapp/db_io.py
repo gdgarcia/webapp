@@ -28,7 +28,7 @@ def create_db(name, db_dir=DEFAULT_DIR, data=None, overwrite=False):
     return name, db_dir, success 
 
 
-def write_db(name, data, db_dir=DEFAULT_DIR):
+def write_db(name, data, table=None, db_dir=DEFAULT_DIR):
 
     db_name = path.join(db_dir, name)
     if not path.isfile(db_name):
@@ -38,7 +38,7 @@ def write_db(name, data, db_dir=DEFAULT_DIR):
     
     try:
         with sqlite3.connect(db_name) as conn:
-            _write_data_to_db(conn, data)
+            _write_data_to_db(conn, data, table)
     except sqlite3.Error:
         pass
 
@@ -65,10 +65,11 @@ def read_db(name, db_dir=DEFAULT_DIR, table=None):
     return db_data, success
 
 
-def _write_data_to_db(conn, data):
+def _write_data_to_db(conn, data, table=None):
+
+    write_statements = _write_statements()
 
     cur = conn.cursor()
-    write_statements = _write_statements()
     for table in write_statements:
         flat_items = _get_flat_items(data[table])
         for item in flat_items:
@@ -76,10 +77,10 @@ def _write_data_to_db(conn, data):
             conn.commit()
 
 
-def _get_data_from_db(conn, table):
+def _get_data_from_db(conn, table=None):
 
-    read_statements = _read_statements()
     db_data = {}
+    read_statements = _read_statements()
     cur = conn.cursor()
 
     if table is None:
@@ -88,7 +89,7 @@ def _get_data_from_db(conn, table):
             db_data[table_name] = _dict_from_flat_data(cur.fetchall())
     else:
         cur.execute(read_statements[table])
-        db_data[table] = cur.fetchall()
+        db_data[table] = _dict_from_flat_data(cur.fetchall())
 
     return db_data
 
@@ -102,12 +103,14 @@ def _create_statements():
                 supply REAL NOT NULL
             );
         """),
+
         "DEST": ("""
             CREATE TABLE IF NOT EXISTS DEST (
                 name TEXT PRIMARY KEY NOT NULL,
                 demand REAL NOT NULL
             );
         """),
+
         "COST": ("""
             CREATE TABLE IF NOT EXISTS COST (
                 orig TEXT NOT NULL,
@@ -117,6 +120,17 @@ def _create_statements():
                 FOREIGN KEY (dest) references DEST(name),
                 PRIMARY KEY (orig, dest)
             );
+        """),
+
+        "RES": ("""
+            CREATE TABLE IF NOT EXISTS RES (
+                orig TEXT NOT NULL,
+                dest TEXT NOT NULL,
+                trans REAL NOT NULL,
+                FOREIGN KEY (orig) references ORIG(name),
+                FOREIGN KEY (dest) references DEST(name),
+                PRIMARY KEY (orig, dest)
+            )
         """)
     }
 
@@ -129,6 +143,7 @@ def _read_statements():
         "ORIG": "SELECT * FROM ORIG",
         "DEST": "SELECT * FROM DEST",
         "COST": "SELECT * FROM COST",
+        "RES": "SELECT * FROM RES"
     }
 
     return read_statements
@@ -145,6 +160,9 @@ def _write_statements():
         """),
         "COST": ("""
             INSERT INTO COST (orig, dest, cost) VALUES (?, ?, ?);
+        """),
+        "RES": ("""
+            INSERT INTO RES (orig, dest, trans) VALUES (?, ?, ?);
         """)
     }
 

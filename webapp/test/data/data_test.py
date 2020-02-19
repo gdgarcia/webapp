@@ -15,7 +15,6 @@ data = {
         "MARTE": {
             "JUPITER": .4,
             "SOL": .3
-
         }
     }
 }
