@@ -5,18 +5,14 @@ from collections.abc import MutableMapping
 import webapp
 
 
-DEFAULT_DIR = path.join(path.dirname(webapp.__path__[0]), 'estudos')
-
-
-def create_db(name, db_dir=DEFAULT_DIR, data=None, overwrite=False):
+def create_db(db_name, data=None, overwrite=False):
 
     success = False
-    db_name = path.join(db_dir, name)
 
     if path.isfile(db_name) and not overwrite:
-        raise RuntimeError("Uma DB com o nome {} ja existe no diretorio {}. "
+        raise RuntimeError("Uma DB com o nome {1} ja existe no diretorio {0}. "
                            " Para sobreescrever, faca overwrite=True "
-                           "".format(name, db_dir))
+                           "".format(*path.split(db_name)))
 
     with sqlite3.connect(db_name) as conn:
         cur = conn.cursor()
@@ -24,38 +20,39 @@ def create_db(name, db_dir=DEFAULT_DIR, data=None, overwrite=False):
             cur.execute(create_statement)
         conn.commit()
         success = True
+    
+    if data is not None:
+        write_db(db_name, data)
 
-    return name, db_dir, success 
+    return db_name, success 
 
 
-def write_db(name, data, table=None, db_dir=DEFAULT_DIR):
+def write_db(db_name, data):
 
-    db_name = path.join(db_dir, name)
     if not path.isfile(db_name):
-        raise RuntimeError("A DB {} nao existe no diretorio {}. " 
+        raise RuntimeError("A DB {1} nao existe no diretorio {0}. " 
                            "Para criar uma nova DB, use a funcao "
-                           "especifica.".format(name, db_dir))
+                           "especifica.".format(*path.split(db_name)))
     
     try:
         with sqlite3.connect(db_name) as conn:
-            _write_data_to_db(conn, data, table)
+            _write_data_to_db(conn, data)
     except sqlite3.Error:
         pass
 
 
-def read_db(name, db_dir=DEFAULT_DIR, table=None):
+def read_db(db_name, tables=None):
 
     success = False
-    db_name = path.join(db_dir, name)
 
     if not path.isfile(db_name):
-        raise RuntimeError("DB {} nao existente no diretorio {}. Para criar, "
-                           "use a funcao webapp.create_db. "
-                           "".format(db_name, db_dir))
+        raise RuntimeError("DB {1} nao existente no diretorio {0}. Para "
+                           "criar, use a funcao webapp.create_db. "
+                           "".format(*path.split(db_name)))
 
     try:
         with sqlite3.connect(db_name) as conn:
-            db_data = _get_data_from_db(conn, table)
+            db_data = _get_data_from_db(conn, tables)
 
     except sqlite3.Error:
         raise
@@ -65,29 +62,50 @@ def read_db(name, db_dir=DEFAULT_DIR, table=None):
     return db_data, success
 
 
-def _write_data_to_db(conn, data, table=None):
-
-    write_statements = _write_statements()
+def _write_data_to_db(conn, data):
 
     cur = conn.cursor()
-    for table in write_statements:
+
+    write_statements = _write_statements()
+    tables = set(data.keys())
+
+    if tables.issubset(write_statements.keys()):
+        tables = tables.intersection(write_statements.keys())
+    else:
+        raise UserWarning("Os dados para escrita na DB contêm outros campos "
+                          "além de 'ORIG', 'DEST', 'COST', 'RES'.")
+
+
+    for table in tables:
         flat_items = _get_flat_items(data[table])
         for item in flat_items:
             cur.execute(write_statements[table], item)
             conn.commit()
 
+    return tables
 
-def _get_data_from_db(conn, table=None):
+
+def _get_data_from_db(conn, tables=None):
 
     db_data = {}
     read_statements = _read_statements()
     cur = conn.cursor()
 
-    if table is None:
-        for table_name in read_statements:
-            cur.execute(read_statements[table_name])
-            db_data[table_name] = _dict_from_flat_data(cur.fetchall())
+    if tables is None:
+        tables = read_statements.keys()
     else:
+        if isinstance(tables, str):
+            tables = {tables}
+        else:
+            tables = set(tables)
+        
+        if not tables.issubset(read_statements.keys()):
+            raise UserWarning("As tabelas para leitura da DB contêm outros "
+                              "campos além de 'ORIG', 'DEST', 'COST', 'RES'.")
+        else:
+            tables = tables.intersection(set(read_statements.keys()))
+
+    for table in tables:
         cur.execute(read_statements[table])
         db_data[table] = _dict_from_flat_data(cur.fetchall())
 

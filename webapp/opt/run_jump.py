@@ -3,10 +3,10 @@ from os import path
 from webapp import __path__ as web_path
 
 
-DEFAULT_JULIA = path.join(web_path[0], 'opt', 'run_optimization.jl')
+DEFAULT_JULIA_FILE = path.join(web_path[0], 'opt', 'run_optimization.jl')
 
 
-def _call_jump(buffer_file, julia_file=DEFAULT_JULIA):
+def _call_jump(buffer_file, julia_file=DEFAULT_JULIA_FILE):
     try:
         import julia
         from julia import Main
